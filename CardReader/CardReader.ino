@@ -1,3 +1,4 @@
+#include <freertos/FreeRTOS.h> 
 // TFT
 #include "Free_Fonts.h" // Include the header file attached to this sketch
 #include "SPI.h"
@@ -8,9 +9,15 @@
 #include "freertos/FreeRTOS.h" //freeRTOS items to be used
 #include "wi-fi-config.h"
 
-// TFT
+// ScreenManagerTask - TFT
 TFT_eSPI tft = TFT_eSPI();
-// WiFi
+typedef struct _ScreenStatus
+{
+  bool shiyou = false;
+}ScreenStatus;
+QueueHandle_t xQueueScreenStatus;
+
+// MessageManagerTask - WiFi
 const char* ssid     = MY_SSID;
 const char* password = MY_PASSWORD;
 const char *mqtt_broker = MY_BROKER;
@@ -19,6 +26,38 @@ WiFiClient   wifiClient; // do the WiFi instantiation thing
 PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT instantiation thing
 SemaphoreHandle_t sema_MQTT_KeepAlive;
 
+void ScreenManagerTask( void *pvParameters ) {
+  tft.begin();
+  tft.setRotation(3);
+  
+  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setFreeFont(FF7);
+  
+  tft.fillScreen(TFT_BLACK);
+  tft.drawString(" ID:-", 40, 40, GFXFF);
+  tft.drawString("sts:-", 40, 80, GFXFF);
+  tft.drawString("s_T:-", 40, 120, GFXFF);
+  tft.drawString("e_T:-", 40, 160, GFXFF);
+
+  ScreenStatus screenStatus;
+
+  for(;;)
+  {
+    if(pdTRUE == xQueueReceive(xQueueScreenStatus,&screenStatus,portMAX_DELAY)){
+      tft.fillScreen(TFT_BLACK);
+      tft.drawString(" ID:13045", 40, 40, GFXFF);
+      tft.drawString("s_T:13:00", 40, 120, GFXFF);
+      tft.drawString("e_T:14:00", 40, 160, GFXFF);
+      if(!screenStatus.shiyou){
+          tft.drawString("sts:yoyaku", 40, 80, GFXFF);
+      }else{
+          tft.drawString("sts:shiyou", 40, 80, GFXFF);
+      }
+    }
+    Serial.println("[ScreenManagerTask] hello");
+    vTaskDelay(1000);
+  }
+}
 
 void MessageManagerTask( void *pvParameters )
 {
@@ -71,8 +110,24 @@ void mqttCallback(char *topic, byte *payload, unsigned int length) {
     for (int i = 0; i < length; i++) {
         Serial.print((char) payload[i]);
     }
+
+    if(payload[0] == 'y'){
+      Serial.println("[mqtt] send to screen task yoyaku message");
+      ScreenStatus screenStatus;
+      screenStatus.shiyou = false;
+      xQueueSend(xQueueScreenStatus, &screenStatus,0);
+    }else if(payload[0] == 's'){
+      Serial.println("[mqtt] send to screen task shiyou message");
+      ScreenStatus screenStatus;
+      screenStatus.shiyou = true;
+      xQueueSend(xQueueScreenStatus, &screenStatus,0);
+    }
+    
+    /*
+    Serial.print("Message:");
     Serial.println();
     Serial.println("-----------------------");
+    */
 }
 
 void IRAM_ATTR WiFiEvent(WiFiEvent_t event)
@@ -109,28 +164,14 @@ void connectToWiFi()
 }
 
 
-void ScreenManagerTask( void *pvParameters ) {
-  tft.begin();
-  tft.setRotation(3);
-  
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
-  tft.setFreeFont(FF7);
-  
-  tft.fillScreen(TFT_BLACK);
-  tft.drawString(" ID:13045", 40, 40, GFXFF);
-  tft.drawString("sts:yoyaku", 40, 80, GFXFF);
-  tft.drawString("s_T:13:00", 40, 120, GFXFF);
-  tft.drawString("e_T:14:00", 40, 160, GFXFF);
 
-  for(;;)
-  {
-    Serial.println("[ScreenManagerTask] hello");
-    vTaskDelay(1000);
-  }
-}
 
 void setup() {
   Serial.begin(115200);
+
+  // メールボックスの作成
+  xQueueScreenStatus = xQueueCreate(5, sizeof(ScreenStatus)); // タスク内で生成してしまうと、生成タスクよりも前に、別のタスクが送信してしまう可能性があるためここで生成する
+  
   xTaskCreateUniversal( ScreenManagerTask, "ScreenManagerTask", 15000, NULL, 6, NULL, CONFIG_ARDUINO_RUNNING_CORE );
   xTaskCreateUniversal( MessageManagerTask, "MessageManagerTask", 15000, NULL, 7, NULL, CONFIG_ARDUINO_RUNNING_CORE );
 }
