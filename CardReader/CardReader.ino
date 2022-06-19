@@ -8,6 +8,8 @@
 #include <PubSubClient.h>
 #include "freertos/FreeRTOS.h" //freeRTOS items to be used
 #include "wi-fi-config.h"
+// RC-S620S
+#include "RCS620S_ESP32.h"
 
 // ScreenManagerTask - TFT
 TFT_eSPI tft = TFT_eSPI();
@@ -25,6 +27,12 @@ const int mqtt_port = 1883;
 WiFiClient   wifiClient; // do the WiFi instantiation thing
 PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT instantiation thing
 SemaphoreHandle_t sema_MQTT_KeepAlive;
+
+// NFC-Communication-Manager Task
+#define COMMAND_TIMEOUT  400
+#define POLLING_INTERVAL 500
+RCS620S rcs620s(Serial2);
+
 
 void ScreenManagerTask( void *pvParameters ) {
   tft.begin();
@@ -164,6 +172,57 @@ void connectToWiFi()
 }
 
 
+void  NfcCommunicationManager( void *param )
+{
+  Serial2.begin(115200);
+  delay(1000);
+
+  int ret = rcs620s.initDevice();
+  Serial.print("RCS620S Init = ");
+  Serial.println(ret);
+  
+  uint8_t data;
+  
+  while( 1 ) {
+    
+    rcs620s.timeout = COMMAND_TIMEOUT;
+    int ret = rcs620s.polling();
+    Serial.print("RCS620S polling = ");
+    Serial.println(ret);
+    if (ret) {
+      
+      Serial.print("idm = ");
+      for (int i = 0; i < 8; i++) {
+        Serial.print(rcs620s.idm[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.println();
+  
+      Serial.print("pmm = ");
+      for (int i = 0; i < 8; i++) {
+        Serial.print(rcs620s.pmm[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.println();
+
+      rcs620s.readWithEncryption(
+        rcs620s.pmm,
+        0x000B,
+        1 /* block id = 1 の末尾に番号が入っている*/);
+
+      while(1){
+        if(rcs620s.polling() == 0){
+          break;
+        }
+        vTaskDelay(1);
+      }
+    }
+  
+    rcs620s.rfOff();
+    vTaskDelay(POLLING_INTERVAL);
+  }
+}
+
 
 
 void setup() {
@@ -174,6 +233,7 @@ void setup() {
   
   xTaskCreateUniversal( ScreenManagerTask, "ScreenManagerTask", 15000, NULL, 6, NULL, CONFIG_ARDUINO_RUNNING_CORE );
   xTaskCreateUniversal( MessageManagerTask, "MessageManagerTask", 15000, NULL, 7, NULL, CONFIG_ARDUINO_RUNNING_CORE );
+  xTaskCreateUniversal( NfcCommunicationManager, "NfcCommunicationManager", 15000, NULL, 5, NULL, CONFIG_ARDUINO_RUNNING_CORE );
 }
 void loop() {
   Serial.println("[main] hello");
