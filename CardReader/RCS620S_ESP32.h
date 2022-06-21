@@ -35,7 +35,8 @@ public:
     int push(
         const uint8_t* data,
         uint8_t dataLen);
-    bool readWithEncryption(
+        
+    bool readCardId(
         uint8_t *idm,
         uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN],
         uint8_t* resLen);

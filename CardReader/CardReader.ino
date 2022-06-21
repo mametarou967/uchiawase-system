@@ -193,22 +193,8 @@ void  NfcCommunicationManager( void *param )
 
       uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN];
       uint8_t resLen = 0;
-      
-      Serial.print("idm = ");
-      for (int i = 0; i < 8; i++) {
-        Serial.print(rcs620s.idm[i], HEX);
-        Serial.print(" ");
-      }
-      Serial.println();
-  
-      Serial.print("pmm = ");
-      for (int i = 0; i < 8; i++) {
-        Serial.print(rcs620s.pmm[i], HEX);
-        Serial.print(" ");
-      }
-      Serial.println();
 
-      rcs620s.readWithEncryption(
+      rcs620s.readCardId(
         rcs620s.pmm,
         res,
         &resLen);

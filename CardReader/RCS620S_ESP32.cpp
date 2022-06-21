@@ -191,7 +191,7 @@ int RCS620S::push(
     return 1;
 }
 
-bool RCS620S::readWithEncryption(
+bool RCS620S::readCardId(
   uint8_t *idm,
     uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN],
     uint8_t* resLen)
@@ -213,28 +213,9 @@ bool RCS620S::readWithEncryption(
 
     Serial.print("readWithEncryption:ret = ");
     Serial.println(ret);
-    
-    Serial.print("readWithEncryption:buf-hex = ");
-    
-    for (int i = 0; i < responseLen; i++) {
-      Serial.print(buf[i], HEX);
-      Serial.print(" ");
-    }
-    Serial.println();
 
-    Serial.print("readWithEncryption:buf-dec = ");
-    
-    for (int i = 0; i < responseLen; i++) {
-      Serial.print(buf[i]);
-      Serial.print(" ");
-    }
-    
-    Serial.println();
-    
-    // delay(1000);
-
-    memcpy(res,buf,responseLen);
-    *resLen = responseLen;
+    memcpy(res,buf+23,5);
+    *resLen = 5;
     return true;
 }
 
