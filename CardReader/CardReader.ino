@@ -26,6 +26,8 @@ const char* ssid     = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 const char *mqtt_broker = MQTT_BROKER;
 const int mqtt_port = MQTT_PORT;
+const char *http_server = HTTP_SERVER;
+const int http_port = HTTP_PORT;
 WiFiClient   wifiClient; // do the WiFi instantiation thing
 PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT instantiation thing
 SemaphoreHandle_t sema_MQTT_KeepAlive;
@@ -104,7 +106,7 @@ void MessageManagerTask( void *pvParameters )
         HTTPClient http;
         String keyValue = "/?id=" + String((const char *)authRequest.id);
         Serial.printf("[HTTP] String=%s\n",keyValue);
-        http.begin(wifiClient,"192.168.50.225",5000,keyValue,false); // sample url
+        http.begin(wifiClient,http_server,HTTP_PORT,keyValue,false); // sample url
         Serial.print("[HTTP] GET...\n");
         // start connection and send HTTP header
         int httpCode = http.GET();
