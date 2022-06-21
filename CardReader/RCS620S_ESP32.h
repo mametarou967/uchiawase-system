@@ -38,7 +38,9 @@ public:
     bool readWithEncryption(
         uint8_t *idm,
         uint16_t sid,
-        uint8_t bid);
+        uint8_t bid,
+        uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN],
+        uint8_t* resLen);
         
 
 private:

@@ -194,7 +194,9 @@ int RCS620S::push(
 bool RCS620S::readWithEncryption(
   uint8_t *idm,
   uint16_t sid,
-  uint8_t bid)
+  uint8_t bid,
+    uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN],
+    uint8_t* resLen)
 {
     int ret;
     uint8_t buf[RCS620S_MAX_CARD_RESPONSE_LEN];
@@ -233,6 +235,8 @@ bool RCS620S::readWithEncryption(
     
     delay(1000);
 
+    memcpy(res,buf,responseLen);
+    *resLen = responseLen;
     return true;
 }
 

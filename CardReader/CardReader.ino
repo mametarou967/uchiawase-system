@@ -190,6 +190,9 @@ void  NfcCommunicationManager( void *param )
     Serial.print("RCS620S polling = ");
     Serial.println(ret);
     if (ret) {
+
+      uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN];
+      uint8_t resLen = 0;
       
       Serial.print("idm = ");
       for (int i = 0; i < 8; i++) {
@@ -208,8 +211,16 @@ void  NfcCommunicationManager( void *param )
       rcs620s.readWithEncryption(
         rcs620s.pmm,
         0x000B,
-        1 /* block id = 1 の末尾に番号が入っている*/);
-
+        1, /* block id = 1 の末尾に番号が入っている*/
+        res,
+        &resLen);
+        
+      for (int i = 0; i < resLen; i++) {
+        Serial.print(res[i], HEX);
+        Serial.print(" ");
+      }
+      Serial.println();
+      
       while(1){
         if(rcs620s.polling() == 0){
           break;
