@@ -31,7 +31,7 @@ PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT ins
 SemaphoreHandle_t sema_MQTT_KeepAlive;
 typedef struct _AuthRequest
 {
-  unsigned char id[5];
+  unsigned char id[6];
 }AuthRequest;
 QueueHandle_t xMessageManagerRequest;
 
@@ -102,7 +102,9 @@ void MessageManagerTask( void *pvParameters )
 
         // http
         HTTPClient http;
-        http.begin(wifiClient,"192.168.50.225",5000,"/?id=13045",false); // sample url
+        String keyValue = "/?id=" + String((const char *)authRequest.id);
+        Serial.printf("[HTTP] String=%s\n",keyValue);
+        http.begin(wifiClient,"192.168.50.225",5000,keyValue,false); // sample url
         Serial.print("[HTTP] GET...\n");
         // start connection and send HTTP header
         int httpCode = http.GET();
@@ -276,6 +278,7 @@ void  NfcCommunicationManager( void *param )
         
         AuthRequest authRequest;
         memcpy(authRequest.id,res,5);
+        authRequest.id[5] = NULL;
         xQueueSend(xMessageManagerRequest, &authRequest,0);
       }
       
