@@ -1,3 +1,6 @@
-#define MY_SSID "MoominValley2020"
-#define MY_PASSWORD "Olavi8Kiti"
-#define MY_BROKER "iot-tech-lab.com"
+#define WIFI_SSID "AAAAAA"
+#define WIFI_PASSWORD "BBBBBB"
+#define MQTT_BROKER "XXX.YYY.ZZZ.AAA"
+#define MQTT_PORT 1883
+#define HTTP_SERVER "XXX.YYY.ZZZ.AAA"
+#define HTTP_PORT 5000
