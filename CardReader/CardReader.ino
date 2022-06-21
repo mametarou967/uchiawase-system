@@ -6,6 +6,8 @@
 // Wi-Fi
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include "freertos/FreeRTOS.h" //freeRTOS items to be used
 #include "wi-fi-config.h"
 // RC-S620S
@@ -27,6 +29,11 @@ const int mqtt_port = 1883;
 WiFiClient   wifiClient; // do the WiFi instantiation thing
 PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT instantiation thing
 SemaphoreHandle_t sema_MQTT_KeepAlive;
+typedef struct _AuthRequest
+{
+  unsigned char id[5];
+}AuthRequest;
+QueueHandle_t xMessageManagerRequest;
 
 // NFC-Communication-Manager Task
 #define COMMAND_TIMEOUT  400
@@ -42,10 +49,10 @@ void ScreenManagerTask( void *pvParameters ) {
   tft.setFreeFont(FF7);
   
   tft.fillScreen(TFT_BLACK);
-  tft.drawString(" ID:-", 40, 40, GFXFF);
-  tft.drawString("sts:-", 40, 80, GFXFF);
-  tft.drawString("s_T:-", 40, 120, GFXFF);
-  tft.drawString("e_T:-", 40, 160, GFXFF);
+  tft.drawString(" ID:-", 40, 20, GFXFF);
+  tft.drawString("sts:-", 40, 60, GFXFF);
+  tft.drawString("s_T:-", 40, 100, GFXFF);
+  tft.drawString("e_T:-", 40, 140, GFXFF);
 
   ScreenStatus screenStatus;
 
@@ -53,13 +60,13 @@ void ScreenManagerTask( void *pvParameters ) {
   {
     if(pdTRUE == xQueueReceive(xQueueScreenStatus,&screenStatus,portMAX_DELAY)){
       tft.fillScreen(TFT_BLACK);
-      tft.drawString(" ID:13045", 40, 40, GFXFF);
-      tft.drawString("s_T:13:00", 40, 120, GFXFF);
-      tft.drawString("e_T:14:00", 40, 160, GFXFF);
+      tft.drawString(" ID:13045", 40, 20, GFXFF);
+      tft.drawString("s_T:13:00", 40, 100, GFXFF);
+      tft.drawString("e_T:14:00", 40, 140, GFXFF);
       if(!screenStatus.shiyou){
-          tft.drawString("sts:yoyaku", 40, 80, GFXFF);
+          tft.drawString("sts:yoyaku", 40, 60, GFXFF);
       }else{
-          tft.drawString("sts:shiyou", 40, 80, GFXFF);
+          tft.drawString("sts:shiyou", 40, 60, GFXFF);
       }
     }
     Serial.println("[ScreenManagerTask] hello");
@@ -79,9 +86,59 @@ void MessageManagerTask( void *pvParameters )
     //check for a is-connected and if the WiFi 'thinks' its connected, found checking on both is more realible than just a single check
     if ( (wifiClient.connected()) && (WiFi.status() == WL_CONNECTED) )
     {
-      xSemaphoreTake( sema_MQTT_KeepAlive, portMAX_DELAY ); // whiles MQTTlient.loop() is running no other mqtt operations should be in process
-      MQTTclient.loop();
-      xSemaphoreGive( sema_MQTT_KeepAlive );
+      // httpによる要求応答の評価
+      AuthRequest authRequest;
+      if(pdTRUE == xQueueReceive(xMessageManagerRequest,&authRequest,0)) // mqttを待たせたくないため、0秒で即返却とする
+      {
+        // mqttを一度切る
+        disconnectToMQTT();
+        
+        Serial.print("message receive:");
+        for (int i = 0; i < 5; i++) {
+          Serial.print(authRequest.id[i], HEX);
+          Serial.print(" ");
+        }
+        Serial.println();
+
+        // http
+        HTTPClient http;
+        http.begin(wifiClient,"192.168.50.225",5000,"/?id=13045",false); // sample url
+        Serial.print("[HTTP] GET...\n");
+        // start connection and send HTTP header
+        int httpCode = http.GET();
+        Serial.printf("[HTTP] GET...done %d\n",httpCode);
+        if(httpCode > 0) {
+            // HTTP header has been send and Server response header has been handled
+            Serial.printf("[HTTP] GET... code: %d\n", httpCode);
+  
+            // file found at server
+            if(httpCode == HTTP_CODE_OK) {
+              StaticJsonDocument<200> doc;
+              
+              DeserializationError error = deserializeJson(doc, http.getString());
+            
+              // パースが成功したか確認。できなきゃ終了
+              if (error) {
+                Serial.print(F("deserializeJson() failed: "));
+                Serial.println(error.f_str());
+              }else{
+                const char* jsonName = doc["result"];
+                Serial.printf("jsonName = %s\n",jsonName);
+              }
+            }else{
+              Serial.printf("[HTTP] parse failed");
+            }
+        } else {
+            Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
+        }
+
+        connectToMQTT();
+      }else{
+        // mqttによる通知の評価
+        xSemaphoreTake( sema_MQTT_KeepAlive, portMAX_DELAY ); // whiles MQTTlient.loop() is running no other mqtt operations should be in process
+        MQTTclient.loop();
+        xSemaphoreGive( sema_MQTT_KeepAlive );
+      }
     }
     else {
       log_i( "MQTT keep alive found MQTT status % s WiFi status % s", String(wifiClient.connected()), String(WiFi.status()) );
@@ -110,6 +167,15 @@ void connectToMQTT()
   MQTTclient.setCallback( mqttCallback );
   MQTTclient.subscribe  ( "test" );
 } //void connectToMQTT()
+
+void disconnectToMQTT()
+{
+  while(MQTTclient.connected())
+  {
+    MQTTclient.disconnect();
+    vTaskDelay( 1 );
+  }
+}
 
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
     Serial.print("Message arrived in topic: ");
@@ -191,19 +257,26 @@ void  NfcCommunicationManager( void *param )
     Serial.println(ret);
     if (ret) {
 
+      bool cardReadResult = false;
       uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN];
       uint8_t resLen = 0;
 
-      rcs620s.readCardId(
+      cardReadResult = rcs620s.readCardId(
         rcs620s.pmm,
         res,
         &resLen);
+
+      if(cardReadResult){
+        for (int i = 0; i < resLen; i++) {
+          Serial.print(res[i], HEX);
+          Serial.print(" ");
+        }
+        Serial.println();
         
-      for (int i = 0; i < resLen; i++) {
-        Serial.print(res[i], HEX);
-        Serial.print(" ");
+        AuthRequest authRequest;
+        memcpy(authRequest.id,res,5);
+        xQueueSend(xMessageManagerRequest, &authRequest,0);
       }
-      Serial.println();
       
       while(1){
         if(rcs620s.polling() == 0){
@@ -225,6 +298,8 @@ void setup() {
 
   // メールボックスの作成
   xQueueScreenStatus = xQueueCreate(5, sizeof(ScreenStatus)); // タスク内で生成してしまうと、生成タスクよりも前に、別のタスクが送信してしまう可能性があるためここで生成する
+  xMessageManagerRequest = xQueueCreate(5, sizeof(AuthRequest)); // タスク内で生成してしまうと、生成タスクよりも前に、別のタスクが送信してしまう可能性があるためここで生成する
+  
   
   xTaskCreateUniversal( ScreenManagerTask, "ScreenManagerTask", 15000, NULL, 6, NULL, CONFIG_ARDUINO_RUNNING_CORE );
   xTaskCreateUniversal( MessageManagerTask, "MessageManagerTask", 15000, NULL, 7, NULL, CONFIG_ARDUINO_RUNNING_CORE );
