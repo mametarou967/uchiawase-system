@@ -193,8 +193,6 @@ int RCS620S::push(
 
 bool RCS620S::readWithEncryption(
   uint8_t *idm,
-  uint16_t sid,
-  uint8_t bid,
     uint8_t res[RCS620S_MAX_CARD_RESPONSE_LEN],
     uint8_t* resLen)
 {
@@ -205,11 +203,11 @@ bool RCS620S::readWithEncryption(
     buf[0] = 0x06;
     memcpy(buf + 1, this->idm, 8);
     buf[9] = 1; // サービスは1つ
-    buf[10] = (uint8_t)((sid >> 0u) & 0xffu);
-    buf[11] = (uint8_t)((sid >> 8u) & 0xffu);
+    buf[10] = 0x0B;
+    buf[11] = 0x00;
     buf[12] = 1; // ブロックは1つ
     buf[13] = 0x80U;
-    buf[14] = bid;
+    buf[14] = 1;
     
     ret = cardCommand(buf, 15, buf, &responseLen);
 
@@ -233,7 +231,7 @@ bool RCS620S::readWithEncryption(
     
     Serial.println();
     
-    delay(1000);
+    // delay(1000);
 
     memcpy(res,buf,responseLen);
     *resLen = responseLen;

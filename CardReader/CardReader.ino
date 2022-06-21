@@ -210,8 +210,6 @@ void  NfcCommunicationManager( void *param )
 
       rcs620s.readWithEncryption(
         rcs620s.pmm,
-        0x000B,
-        1, /* block id = 1 の末尾に番号が入っている*/
         res,
         &resLen);
         
