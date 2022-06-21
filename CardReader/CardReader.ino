@@ -22,10 +22,10 @@ typedef struct _ScreenStatus
 QueueHandle_t xQueueScreenStatus;
 
 // MessageManagerTask - WiFi
-const char* ssid     = MY_SSID;
-const char* password = MY_PASSWORD;
-const char *mqtt_broker = MY_BROKER;
-const int mqtt_port = 1883;
+const char* ssid     = WIFI_SSID;
+const char* password = WIFI_PASSWORD;
+const char *mqtt_broker = MQTT_BROKER;
+const int mqtt_port = MQTT_PORT;
 WiFiClient   wifiClient; // do the WiFi instantiation thing
 PubSubClient MQTTclient( mqtt_broker, mqtt_port, wifiClient ); //do the MQTT instantiation thing
 SemaphoreHandle_t sema_MQTT_KeepAlive;
@@ -132,6 +132,7 @@ void MessageManagerTask( void *pvParameters )
             Serial.printf("[HTTP] GET... failed, error: %s\n", http.errorToString(httpCode).c_str());
         }
 
+        // mqttが切れているのでつなげる
         connectToMQTT();
       }else{
         // mqttによる通知の評価
@@ -253,8 +254,8 @@ void  NfcCommunicationManager( void *param )
     
     rcs620s.timeout = COMMAND_TIMEOUT;
     int ret = rcs620s.polling();
-    Serial.print("RCS620S polling = ");
-    Serial.println(ret);
+    // Serial.print("RCS620S polling = ");
+    // Serial.println(ret);
     if (ret) {
 
       bool cardReadResult = false;
@@ -306,7 +307,7 @@ void setup() {
   xTaskCreateUniversal( NfcCommunicationManager, "NfcCommunicationManager", 15000, NULL, 5, NULL, CONFIG_ARDUINO_RUNNING_CORE );
 }
 void loop() {
-  Serial.println("[main] hello");
+  // Serial.println("[main] hello");
   vTaskDelay(1000);
 }
 
